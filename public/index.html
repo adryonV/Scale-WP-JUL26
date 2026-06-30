@@ -524,8 +524,10 @@ function renderMetaAds(){
 const OPT_COLS=[
   ['name','Nome',null],['spendT','Invest. c/ imp',v=>money(v)],['impressions','Impr.',v=>int(v)],
   ['clicks','Cliques',v=>int(v)],['ctr','CTR',v=>pct(v)],['cpc','CPC',v=>money(v)],
-  ['cpm','CPM',v=>money(v)],['lpv','Page Views',v=>int(v)],['checkouts','Checkouts',v=>int(v)],
-  ['sales','Vendas Meta',v=>int(v)],['revenue','Receita',v=>money(v)],
+  ['cpm','CPM',v=>money(v)],['lpv','Page Views',v=>int(v)],['clkToPv','Cliq→PV',v=>pct(v)],
+  ['checkouts','Checkouts',v=>int(v)],['pvToChk','PV→CHK',v=>pct(v)],
+  ['sales','Vendas Meta',v=>int(v)],['chkToSales','CHK→Vnd',v=>pct(v)],
+  ['revenue','Receita',v=>money(v)],
   ['conv','Conv.',v=>pct(v)],['cac','CAC',v=>money(v)],['roas','ROAS',v=>v==null?DASH:dec(v)+'×'],
 ];
 function renderOptTable(){
