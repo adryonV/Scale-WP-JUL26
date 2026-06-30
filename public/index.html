@@ -144,6 +144,9 @@ const fromDate = dt => dt.toISOString().slice(0,10);
 const addDays = (s,n)=>{ const dt=toDate(s); dt.setUTCDate(dt.getUTCDate()+n); return fromDate(dt); };
 const diffDays = (a,b)=> Math.round((toDate(b)-toDate(a))/86400000); // b-a
 const fmtBR = s => { const [y,m,d]=s.split('-'); return d+'/'+m+'/'+y; };
+// "hoje" no fuso de Brasília (UTC-3) — usado como âncora dos filtros de período
+const todayBR = () => { const d=new Date(); d.setUTCHours(d.getUTCHours()-3); return d.toISOString().slice(0,10); };
+const yesterdayBR = () => addDays(todayBR(),-1);
 
 let DATA=null, ADS=[], SALES=[], TAX=1.1385, MIN=null, MAX=null;
 let curStart=null, curEnd=null, preset='all';
@@ -161,8 +164,9 @@ async function load(){
     return;
   }
   ADS = DATA.ads||[]; SALES = DATA.sales||[]; TAX = DATA.taxRate||1.1385;
-  TAXBADGE.textContent = 'imposto ×'+nf2.format(TAX);
-  document.getElementById('taxFoot').textContent = nf2.format(TAX);
+  const nf4tax = new Intl.NumberFormat('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4});
+  TAXBADGE.textContent = 'imposto ×'+nf4tax.format(TAX);
+  document.getElementById('taxFoot').textContent = nf4tax.format(TAX);
   MIN = DATA.dateRange.min; MAX = DATA.dateRange.max;
   curStart = MIN; curEnd = MAX; preset='all';
   const g = DATA.generatedAt ? new Date(DATA.generatedAt) : null;
@@ -260,10 +264,26 @@ function scaffold(){
 
 function applyPreset(k){
   preset=k;
-  if(k==='all'){ curStart=MIN; curEnd=MAX; }
-  else if(k==='today'){ curStart=MAX; curEnd=MAX; }
-  else if(k==='yesterday'){ const y=addDays(MAX,-1); curStart=y<MIN?MIN:y; curEnd=y<MIN?MIN:y; }
-  else { const n=parseInt(k,10); let s=addDays(MAX,-(n-1)); if(s<MIN)s=MIN; curStart=s; curEnd=MAX; }
+  const today = todayBR();
+  const yest  = yesterdayBR();
+  if(k==='all'){
+    curStart=MIN; curEnd=MAX;
+  } else if(k==='today'){
+    // mostra o dia atual (pode ter dados parciais)
+    const t = today>MAX ? MAX : today;
+    curStart=t; curEnd=t;
+  } else if(k==='yesterday'){
+    // ontem — último dia completo
+    const y = yest<MIN ? MIN : (yest>MAX ? MAX : yest);
+    curStart=y; curEnd=y;
+  } else {
+    // 7, 14, 30 dias — âncora em ontem (último dia completo)
+    const n   = parseInt(k,10);
+    const end = yest>MAX ? MAX : yest;          // não ultrapassa o máximo dos dados
+    let   s   = addDays(end,-(n-1));
+    if(s<MIN) s=MIN;
+    curStart=s; curEnd=end;
+  }
   document.getElementById('d1').value=curStart; document.getElementById('d2').value=curEnd;
   document.querySelectorAll('#presets .chip').forEach(c=>c.classList.toggle('active',c.dataset.k===preset));
   render();
