@@ -116,9 +116,12 @@ tr.unattr td{color:var(--muted);font-style:italic}
 .drillbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 4px 10px;padding:8px 12px;
   background:#eef2ff;border:1px solid #e0e3ff;border-radius:10px;font-size:12.5px;color:var(--ink)}
 .drillbar b{color:var(--accent)}
-.drillclear{border:1px solid #c9cffb;background:#fff;color:var(--accent);border-radius:999px;
-  padding:3px 10px;font-size:11.5px;font-weight:600}
-.drillclear:hover{background:var(--accent);color:#fff}
+.drillchip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #d7dbf7;
+  border-radius:999px;padding:3px 6px 3px 10px}
+.drillchip b{color:var(--accent)}
+.drillx{border:none;background:#eef2ff;color:var(--accent);border-radius:999px;width:18px;height:18px;
+  line-height:1;font-size:11px;font-weight:700;padding:0}
+.drillx:hover{background:var(--accent);color:#fff}
 .drillhint{margin:2px 4px 10px;font-size:12px;color:var(--muted)}
 
 /* Insights */
@@ -204,6 +207,7 @@ let curStart=null, curEnd=null, preset='all';
 let activeMainTab='metaads';
 let activeLevel='campaign';
 let campaignFilter=null; // when set, adset/ad tables show only this campaign's rows
+let adsetFilter=null;    // when set, the ad table shows only this ad set's rows
 const sortState={campaign:{key:'spendT',dir:-1},adset:{key:'spendT',dir:-1},ad:{key:'spendT',dir:-1}};
 const charts={};
 
@@ -264,12 +268,15 @@ function metrics(a,sl){
 // Aggregate by level (campaign/adset/ad), only counting Facebook-Ads sales.
 function aggregateLevel(level,s,e){
   const m={};
-  // When a campaign is selected (drill-down), restrict adset/ad rows to that campaign.
+  // Drill-down filters: a selected campaign restricts adset/ad rows; a selected
+  // ad set further restricts the ad rows.
   const cf=(level!=='campaign'&&campaignFilter)?campaignFilter:null;
+  const af=(level==='ad'&&adsetFilter)?adsetFilter:null;
   const blank=k=>({name:k,spend:0,impressions:0,clicks:0,lpv:0,checkouts:0,salesCount:0,salesRev:0});
   for(const r of ADS){
     if(r.date<s||r.date>e) continue;
     if(cf&&r.campaign!==cf) continue;
+    if(af&&r.adset!==af) continue;
     const k=r[level]||'(sem nome)';
     const o=(m[k]=m[k]||blank(k));
     o.spend+=r.spend;o.impressions+=r.impressions;o.clicks+=r.clicks;o.lpv+=r.lpv;o.checkouts+=r.checkouts;
@@ -278,6 +285,7 @@ function aggregateLevel(level,s,e){
     if(r.date<s||r.date>e) continue;
     if(r.source!=='facebook') continue;
     if(cf&&r.campaign!==cf) continue;
+    if(af&&r.adset!==af) continue;
     const k=(r[level]||'').trim();
     if(!k) continue;
     const o=(m[k]=m[k]||blank(k));
@@ -530,7 +538,7 @@ function renderMetaAds(){
   // Opt table sub-tabs
   document.querySelectorAll('#optTabs .tab').forEach(t=>{
     t.classList.toggle('active',t.dataset.l===activeLevel);
-    t.onclick=()=>{activeLevel=t.dataset.l;if(activeLevel==='campaign')campaignFilter=null;document.querySelectorAll('#optTabs .tab').forEach(x=>x.classList.toggle('active',x===t));renderOptTable();};
+    t.onclick=()=>{activeLevel=t.dataset.l;if(activeLevel==='campaign'){campaignFilter=null;adsetFilter=null;}if(activeLevel==='adset')adsetFilter=null;document.querySelectorAll('#optTabs .tab').forEach(x=>x.classList.toggle('active',x===t));renderOptTable();};
   });
   renderOptTable();
 }
@@ -552,6 +560,7 @@ function renderOptTable(){
   const rows=aggregateLevel(lvl,curStart,curEnd);
 
   const cf=(lvl!=='campaign'&&campaignFilter)?campaignFilter:null;
+  const af=(lvl==='ad'&&adsetFilter)?adsetFilter:null;
 
   // unattributed sales (fb sales with no campaign match — show italicised)
   const unattrCount={};
@@ -559,6 +568,7 @@ function renderOptTable(){
     if(r.date<curStart||r.date>curEnd) continue;
     if(r.source!=='facebook') continue;
     if(cf&&r.campaign!==cf) continue;
+    if(af&&r.adset!==af) continue;
     if(!r[lvl]||!r[lvl].trim()){
       unattrCount['(não atribuído)']=(unattrCount['(não atribuído)']||{spend:0,impressions:0,clicks:0,lpv:0,checkouts:0,salesCount:0,salesRev:0,unattr:true});
       unattrCount['(não atribuído)'].salesCount+=r.count;
@@ -589,12 +599,18 @@ function renderOptTable(){
   const TM={...metrics({spend:T.spend,impressions:T.impressions,clicks:T.clicks,lpv:T.lpv,checkouts:T.checkouts},{count:T.salesCount,revenue:T.salesRev}),name:'TOTAL'};
 
   let h='';
-  // Drill-down breadcrumb: shows the active campaign filter with a "clear" control.
-  if(cf){
-    h+=`<div class="drillbar">Filtrando por campanha: <b>${esc(cf)}</b>`+
-       `<button class="drillclear" id="drillClear">✕ limpar filtro</button></div>`;
-  } else if(lvl==='campaign'){
+  // Drill-down breadcrumb: shows the active campaign / ad set filters, each removable.
+  const chips=[];
+  if(cf) chips.push(`Campanha: <b>${esc(cf)}</b><button class="drillx" data-clear="camp">✕</button>`);
+  if(af) chips.push(`Conjunto: <b>${esc(af)}</b><button class="drillx" data-clear="adset">✕</button>`);
+  if(chips.length){
+    h+=`<div class="drillbar">Filtrando por: `+
+       chips.map(c=>`<span class="drillchip">${c}</span>`).join('')+`</div>`;
+  }
+  if(lvl==='campaign'){
     h+=`<div class="drillhint">💡 Clique no nome de uma campanha para ver só os conjuntos e anúncios dela.</div>`;
+  } else if(lvl==='adset'){
+    h+=`<div class="drillhint">💡 Clique no nome de um conjunto para ver só os anúncios dele.</div>`;
   }
   h+='<table><thead><tr>';
   OPT_COLS.forEach(c=>{const sorted=st.key===c[0]; h+=`<th data-k="${c[0]}" class="${sorted?'sorted '+(st.dir>0?'asc':''):''}">${c[1]}</th>`;});
@@ -605,9 +621,9 @@ function renderOptTable(){
       const k=c[0];let v=r[k];
       let cell;
       if(k==='name'){
-        // On the campaign tab, real (attributed) campaign rows drill down on click.
-        cell=(lvl==='campaign'&&!r.unattr)
-          ? `<span class="drilllink" data-camp="${esc(r.name)}">${esc(v)}</span>`
+        // Campaign rows drill into ad sets; ad set rows drill into ads. (Real rows only.)
+        cell=(!r.unattr&&(lvl==='campaign'||lvl==='adset'))
+          ? `<span class="drilllink" data-lvl="${lvl}" data-val="${esc(r.name)}">${esc(v)}</span>`
           : esc(v);
       } else cell=(c[2]?c[2](v):v);
       let cls='';
@@ -624,17 +640,23 @@ function renderOptTable(){
   document.querySelectorAll('#optTable thead th').forEach(th=>{
     th.onclick=()=>{const k=th.dataset.k;if(st.key===k)st.dir*=-1;else{st.key=k;st.dir=k==='name'?1:-1;}renderOptTable();};
   });
-  // Drill-down: clicking a campaign name filters conjuntos/anúncios to that campaign.
+  // Drill-down: campaign name -> its ad sets; ad set name -> its ads.
   document.querySelectorAll('#optTable .drilllink').forEach(el=>{
     el.onclick=()=>{
-      campaignFilter=el.dataset.camp;
-      activeLevel='adset';
-      document.querySelectorAll('#optTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.l==='adset'));
+      if(el.dataset.lvl==='campaign'){ campaignFilter=el.dataset.val; activeLevel='adset'; }
+      else { adsetFilter=el.dataset.val; activeLevel='ad'; }
+      document.querySelectorAll('#optTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.l===activeLevel));
       renderOptTable();
     };
   });
-  const dc=document.getElementById('drillClear');
-  if(dc) dc.onclick=()=>{campaignFilter=null;renderOptTable();};
+  // Remove a single filter. Dropping the campaign also drops the ad set under it.
+  document.querySelectorAll('#optTable .drillx').forEach(b=>{
+    b.onclick=()=>{
+      if(b.dataset.clear==='camp'){ campaignFilter=null; adsetFilter=null; }
+      else { adsetFilter=null; }
+      renderOptTable();
+    };
+  });
 }
 
 // =============================================================================
