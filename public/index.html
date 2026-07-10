@@ -73,13 +73,22 @@ button{font:inherit;cursor:pointer}
 
 /* Funnel visual */
 .funnel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px}
-.stage{display:grid;grid-template-columns:170px 1fr 160px;align-items:center;gap:12px;margin:9px 0}
-.stage .name{font-weight:600;font-size:13px}
-.stage .bar{height:30px;border-radius:8px;background:linear-gradient(90deg,var(--accent),var(--accent2));
-  display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:700;font-size:13px;min-width:42px;
+.stage{display:grid;grid-template-columns:210px 1fr 250px;align-items:center;gap:14px;margin:11px 0}
+.stage .name{font-weight:600;font-size:13px;display:flex;flex-direction:column;gap:3px}
+.stage .name .st-delta{font-weight:400;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.stage .bar{height:34px;border-radius:8px;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:700;font-size:14px;min-width:42px;
   transition:width .4s ease}
-.stage .conv{font-size:12px;color:var(--muted);text-align:right}
-.stage .conv b{color:var(--ink)}
+.stage .info{font-size:12px;color:var(--muted);text-align:right;line-height:1.55}
+.stage .info .metric{color:var(--ink);font-weight:600}
+.stage .info .passo b{color:var(--ink)}
+@media(max-width:680px){
+  .stage{grid-template-columns:1fr;gap:5px;margin:16px 0;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .stage .info{text-align:left}
+}
+/* Derived cost/rate metrics get a distinct bar colour so they read differently from funnel volumes */
+.stage .bar.metric{background:linear-gradient(90deg,#94a3b8,#64748b)}
+.stage.metric-row .name{color:var(--muted)}
 
 /* Charts */
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -96,6 +105,8 @@ button{font:inherit;cursor:pointer}
 /* Tables */
 .tablecard{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
   padding:6px;overflow:auto}
+/* Caps table height and scrolls vertically instead of growing (used for the daily breakdown beyond 7 rows) */
+.tablecard.scroll-y{max-height:380px;overflow-y:auto}
 table{border-collapse:collapse;width:100%;font-size:12.5px}
 th,td{padding:9px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
 th:first-child,td:first-child{text-align:left;white-space:normal;min-width:220px;position:sticky;left:0;background:var(--card)}
@@ -162,7 +173,6 @@ footer{margin-top:34px;color:var(--muted);font-size:11.5px;text-align:center;lin
   <header class="top">
     <div class="title">
       <h1>WP-JUL26 — Meta Ads <span class="badge" id="taxBadge">imposto ×1,1385</span></h1>
-      <p>Vendas atribuídas por UTM (utm_source = Facebook-Ads · campanha / conjunto / anúncio) · imposto aplicado em todas as métricas de custo</p>
     </div>
     <div>
       <div class="meta-line" id="updated">Carregando…</div>
@@ -411,12 +421,8 @@ function renderMetaAds(){
   const prv=metrics(sumAds(pStart,pEnd),sumSales(pStart,pEnd,'facebook'));
 
   let html=`
-  <div class="section-title">Funil do período — vendas Meta Ads (utm_source = Facebook-Ads)</div>
+  <div class="section-title">Funil do período — vendas Meta Ads · Δ vs período anterior</div>
   <div class="funnel" id="funnelBox"></div>
-
-  <div class="section-title">Indicadores · Δ vs período anterior</div>
-  <div class="grid g7" id="kpiBox"></div>
-  <div class="grid g6" id="metBox" style="margin-top:12px"></div>
 
   <div class="section-title">Taxas de Passagem</div>
   <div class="grid g3" id="taxasBox"></div>
@@ -443,41 +449,39 @@ function renderMetaAds(){
   destroyAllCharts();
   CONTENT.innerHTML=html;
 
-  // Funnel
-  const stages=[
-    ['Investimento',money(cur.spendT),cur.spendT,null],
-    ['Impressões',int(cur.impressions),cur.impressions,null],
-    ['Cliques',int(cur.clicks),cur.clicks,cur.impressions?cur.clicks/cur.impressions*100:null],
-    ['Page Views',int(cur.lpv),cur.lpv,cur.clicks?cur.lpv/cur.clicks*100:null],
-    ['Checkouts Initiated',int(cur.checkouts),cur.checkouts,cur.lpv?cur.checkouts/cur.lpv*100:null],
-    ['Vendas Meta Ads',int(cur.sales),cur.sales,cur.checkouts?cur.sales/cur.checkouts*100:null],
+  // Funnel — volume stages (with bar) interleaved with their derived cost/rate metrics.
+  // Order requested: Investimento, Impressões, CPM, Cliques, CPC, CTR, Page Views,
+  // Custo/PV, Checkouts, Custo/CHK, Vendas Meta, CAC, ROAS.
+  const rows=[
+    {t:'vol',name:'Investimento',val:money(cur.spendT),raw:null,delta:deltaHTML(cur.spendT,prv.spendT,'flat'),passo:null},
+    {t:'vol',name:'Impressões',val:int(cur.impressions),raw:cur.impressions,delta:deltaHTML(cur.impressions,prv.impressions,'flat'),passo:null},
+    {t:'met',name:'CPM',val:money(cur.cpm),delta:deltaHTML(cur.cpm,prv.cpm,'down')},
+    {t:'vol',name:'Cliques',val:int(cur.clicks),raw:cur.clicks,delta:deltaHTML(cur.clicks,prv.clicks,'up'),passo:cur.impressions?cur.clicks/cur.impressions*100:null},
+    {t:'met',name:'CPC',val:money(cur.cpc),delta:deltaHTML(cur.cpc,prv.cpc,'down')},
+    {t:'met',name:'CTR',val:pct(cur.ctr),delta:deltaHTML(cur.ctr,prv.ctr,'up')},
+    {t:'vol',name:'Page Views',val:int(cur.lpv),raw:cur.lpv,delta:deltaHTML(cur.lpv,prv.lpv,'up'),passo:cur.clicks?cur.lpv/cur.clicks*100:null},
+    {t:'met',name:'Custo/PV',val:money(cur.cpLpv),delta:deltaHTML(cur.cpLpv,prv.cpLpv,'down')},
+    {t:'vol',name:'Checkouts',val:int(cur.checkouts),raw:cur.checkouts,delta:deltaHTML(cur.checkouts,prv.checkouts,'up'),passo:cur.lpv?cur.checkouts/cur.lpv*100:null},
+    {t:'met',name:'Custo/CHK',val:money(cur.cpChk),delta:deltaHTML(cur.cpChk,prv.cpChk,'down')},
+    {t:'vol',name:'Vendas Meta',val:int(cur.sales),raw:cur.sales,delta:deltaHTML(cur.sales,prv.sales,'up'),passo:cur.checkouts?cur.sales/cur.checkouts*100:null},
+    {t:'met',name:'CAC',val:money(cur.cac),delta:deltaHTML(cur.cac,prv.cac,'down')},
+    {t:'met',name:'ROAS',val:dec(cur.roas)+'×',delta:deltaHTML(cur.roas,prv.roas,'up')},
   ];
-  const maxV=Math.max(...stages.slice(1).map(s=>s[2]||0))||1;
+  const maxV=Math.max(...rows.filter(r=>r.t==='vol'&&r.raw!=null).map(r=>r.raw||0))||1;
   let fhtml='';
-  stages.forEach((s,i)=>{
-    const w=i===0?100:Math.max(4,(s[2]/maxV)*100);
-    const cv=s[3]==null?(i===0?'<b>'+money(cur.revenue)+'</b> receita':''):('passo: <b>'+pct(s[3],1)+'</b>');
-    fhtml+=`<div class="stage"><div class="name">${s[0]}</div><div class="bar" style="width:${w}%">${s[1]}</div><div class="conv">${cv}</div></div>`;
+  rows.forEach(r=>{
+    // Volume rows: bar width proportional to the funnel (Investimento = full width).
+    // Derived cost/rate rows: full-width bar in the distinct 'metric' colour.
+    const isVol=r.t==='vol';
+    const w=isVol?(r.raw==null?100:Math.max(4,(r.raw/maxV)*100)):100;
+    const info=(isVol&&r.passo!=null)?`<div class="passo">passo: <b>${pct(r.passo,1)}</b></div>`:'';
+    fhtml+=`<div class="stage${isVol?'':' metric-row'}">
+      <div class="name">${r.name}<span class="st-delta">${r.delta} vs anterior</span></div>
+      <div class="bar${isVol?'':' metric'}" style="width:${w}%">${r.val}</div>
+      <div class="info">${info}</div>
+    </div>`;
   });
   document.getElementById('funnelBox').innerHTML=fhtml;
-
-  // KPI cards
-  document.getElementById('kpiBox').innerHTML=
-    card('Investimento',money(cur.spendT),deltaHTML(cur.spendT,prv.spendT,'flat'),'c/ imposto')+
-    card('Impressões',int(cur.impressions),deltaHTML(cur.impressions,prv.impressions,'flat'))+
-    card('Cliques',int(cur.clicks),deltaHTML(cur.clicks,prv.clicks,'up'))+
-    card('Page Views',int(cur.lpv),deltaHTML(cur.lpv,prv.lpv,'up'))+
-    card('Checkouts',int(cur.checkouts),deltaHTML(cur.checkouts,prv.checkouts,'up'))+
-    card('Vendas Meta',int(cur.sales),deltaHTML(cur.sales,prv.sales,'up'))+
-    card('Receita Meta',money(cur.revenue),deltaHTML(cur.revenue,prv.revenue,'up'));
-
-  document.getElementById('metBox').innerHTML=
-    card('CPM',money(cur.cpm),deltaHTML(cur.cpm,prv.cpm,'down'),'','Custo por mil impressões (c/ imposto)')+
-    card('CTR',pct(cur.ctr),deltaHTML(cur.ctr,prv.ctr,'up'),'','Cliques ÷ Impressões')+
-    card('CPC',money(cur.cpc),deltaHTML(cur.cpc,prv.cpc,'down'),'','Custo por clique (c/ imposto)')+
-    card('CAC',money(cur.cac),deltaHTML(cur.cac,prv.cac,'down'),'','Gasto c/ imposto ÷ Vendas Meta')+
-    card('Conversão',pct(cur.conv),deltaHTML(cur.conv,prv.conv,'up'),'vendas/PV','Vendas Meta ÷ Page Views')+
-    card('ROAS',dec(cur.roas)+'×',deltaHTML(cur.roas,prv.roas,'up'),'','Receita Meta ÷ Gasto c/ imposto');
 
   document.getElementById('taxasBox').innerHTML=
     card('Cliques → Page Views',pct(cur.clkToPv),deltaHTML(cur.clkToPv,prv.clkToPv,'up'),'','Usuários que chegaram à página ÷ cliques')+
@@ -532,7 +536,9 @@ function renderMetaAds(){
     const tRoas=tSp?tRv/tSp:null,tCac=tSl?tSp/tSl:null,tCtr=tIm?tCl/tIm*100:null,tC2pv=tCl?tLp/tCl*100:null,tPv2ck=tLp?tCk/tLp*100:null,tCk2sl=tCk?tSl/tCk*100:null;
     dt+=`<tr class="total"><td>TOTAL</td><td>${money(tSp)}</td><td>${int(tSl)}</td><td>${money(tCac)}</td><td>${tRoas!=null?dec(tRoas)+'×':DASH}</td><td>${int(tIm)}</td><td>${int(tCl)}</td><td>${pct(tCtr)}</td><td>${int(tLp)}</td><td>${pct(tC2pv)}</td><td>${int(tCk)}</td><td>${pct(tPv2ck)}</td><td>${pct(tCk2sl)}</td></tr>`;
     dt+='</tbody></table>';
-    document.getElementById('dailyTable').innerHTML=dt;
+    const dailyEl=document.getElementById('dailyTable');
+    dailyEl.innerHTML=dt;
+    dailyEl.classList.toggle('scroll-y',days.length>7);
   }
 
   // Opt table sub-tabs
