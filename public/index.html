@@ -455,6 +455,8 @@ function renderMetaAds(){
     {name:'Page Views',val:int(cur.lpv),raw:cur.lpv,passo:cur.clicks?cur.lpv/cur.clicks*100:null},
     {name:'Checkouts',val:int(cur.checkouts),raw:cur.checkouts,passo:cur.lpv?cur.checkouts/cur.lpv*100:null},
     {name:'Vendas Meta',val:int(cur.sales),raw:cur.sales,passo:cur.checkouts?cur.sales/cur.checkouts*100:null},
+    {name:'CAC',val:money(cur.cac),raw:null,passo:null},
+    {name:'ROAS',val:dec(cur.roas)+'×',raw:null,passo:null},
   ];
   const metRows=[
     {name:'CPM',val:money(cur.cpm)},
@@ -462,8 +464,6 @@ function renderMetaAds(){
     {name:'CTR',val:pct(cur.ctr)},
     {name:'Custo/PV',val:money(cur.cpLpv)},
     {name:'Custo/CHK',val:money(cur.cpChk)},
-    {name:'CAC',val:money(cur.cac)},
-    {name:'ROAS',val:dec(cur.roas)+'×'},
   ];
   const maxV=Math.max(...volRows.filter(r=>r.raw!=null).map(r=>r.raw||0))||1;
   const volHtml=volRows.map(r=>{
