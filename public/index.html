@@ -71,21 +71,18 @@ button{font:inherit;cursor:pointer}
 .delta.up{color:var(--good)}.delta.down{color:var(--bad)}.delta.flat{color:var(--muted)}
 .hint{cursor:help;border-bottom:1px dotted #cbd5e1}
 
-/* Funnel visual */
-.funnel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px}
-.stage{display:grid;grid-template-columns:210px 1fr 250px;align-items:center;gap:14px;margin:11px 0}
-.stage .name{font-weight:600;font-size:13px;display:flex;flex-direction:column;gap:3px}
-.stage .name .st-delta{font-weight:400;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
-.stage .bar{height:34px;border-radius:8px;background:linear-gradient(90deg,var(--accent),var(--accent2));
-  display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:700;font-size:14px;min-width:42px;
+/* Funnel visual — two columns: volume (purple) | derived cost/rate (grey) */
+.funnel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+@media(max-width:680px){.funnel{grid-template-columns:1fr;gap:18px}}
+.fcol{display:flex;flex-direction:column;gap:9px}
+.fcol-h{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px}
+.stage{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:12px;margin:0}
+.stage .name{font-weight:600;font-size:13px;display:flex;flex-direction:column;gap:2px}
+.stage .name .st-passo{font-weight:400;font-size:10.5px;color:var(--muted)}
+.stage .bar{height:32px;border-radius:8px;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:700;font-size:13.5px;min-width:44px;
   transition:width .4s ease}
-.stage .info{font-size:12px;color:var(--muted);text-align:right;line-height:1.55}
-.stage .info .metric{color:var(--ink);font-weight:600}
-.stage .info .passo b{color:var(--ink)}
-@media(max-width:680px){
-  .stage{grid-template-columns:1fr;gap:5px;margin:16px 0;padding-bottom:12px;border-bottom:1px solid var(--line)}
-  .stage .info{text-align:left}
-}
 /* Derived cost/rate metrics get a distinct bar colour so they read differently from funnel volumes */
 .stage .bar.metric{background:linear-gradient(90deg,#94a3b8,#64748b)}
 .stage.metric-row .name{color:var(--muted)}
@@ -449,39 +446,37 @@ function renderMetaAds(){
   destroyAllCharts();
   CONTENT.innerHTML=html;
 
-  // Funnel — volume stages (with bar) interleaved with their derived cost/rate metrics.
-  // Order requested: Investimento, Impressões, CPM, Cliques, CPC, CTR, Page Views,
-  // Custo/PV, Checkouts, Custo/CHK, Vendas Meta, CAC, ROAS.
-  const rows=[
-    {t:'vol',name:'Investimento',val:money(cur.spendT),raw:null,delta:deltaHTML(cur.spendT,prv.spendT,'flat'),passo:null},
-    {t:'vol',name:'Impressões',val:int(cur.impressions),raw:cur.impressions,delta:deltaHTML(cur.impressions,prv.impressions,'flat'),passo:null},
-    {t:'met',name:'CPM',val:money(cur.cpm),delta:deltaHTML(cur.cpm,prv.cpm,'down')},
-    {t:'vol',name:'Cliques',val:int(cur.clicks),raw:cur.clicks,delta:deltaHTML(cur.clicks,prv.clicks,'up'),passo:cur.impressions?cur.clicks/cur.impressions*100:null},
-    {t:'met',name:'CPC',val:money(cur.cpc),delta:deltaHTML(cur.cpc,prv.cpc,'down')},
-    {t:'met',name:'CTR',val:pct(cur.ctr),delta:deltaHTML(cur.ctr,prv.ctr,'up')},
-    {t:'vol',name:'Page Views',val:int(cur.lpv),raw:cur.lpv,delta:deltaHTML(cur.lpv,prv.lpv,'up'),passo:cur.clicks?cur.lpv/cur.clicks*100:null},
-    {t:'met',name:'Custo/PV',val:money(cur.cpLpv),delta:deltaHTML(cur.cpLpv,prv.cpLpv,'down')},
-    {t:'vol',name:'Checkouts',val:int(cur.checkouts),raw:cur.checkouts,delta:deltaHTML(cur.checkouts,prv.checkouts,'up'),passo:cur.lpv?cur.checkouts/cur.lpv*100:null},
-    {t:'met',name:'Custo/CHK',val:money(cur.cpChk),delta:deltaHTML(cur.cpChk,prv.cpChk,'down')},
-    {t:'vol',name:'Vendas Meta',val:int(cur.sales),raw:cur.sales,delta:deltaHTML(cur.sales,prv.sales,'up'),passo:cur.checkouts?cur.sales/cur.checkouts*100:null},
-    {t:'met',name:'CAC',val:money(cur.cac),delta:deltaHTML(cur.cac,prv.cac,'down')},
-    {t:'met',name:'ROAS',val:dec(cur.roas)+'×',delta:deltaHTML(cur.roas,prv.roas,'up')},
+  // Funnel — two columns: volume stages (purple, left) and their derived
+  // cost/rate metrics (grey, right). Volume bars scale with the funnel.
+  const volRows=[
+    {name:'Investimento',val:money(cur.spendT),raw:null,passo:null},
+    {name:'Impressões',val:int(cur.impressions),raw:cur.impressions,passo:null},
+    {name:'Cliques',val:int(cur.clicks),raw:cur.clicks,passo:cur.impressions?cur.clicks/cur.impressions*100:null},
+    {name:'Page Views',val:int(cur.lpv),raw:cur.lpv,passo:cur.clicks?cur.lpv/cur.clicks*100:null},
+    {name:'Checkouts',val:int(cur.checkouts),raw:cur.checkouts,passo:cur.lpv?cur.checkouts/cur.lpv*100:null},
+    {name:'Vendas Meta',val:int(cur.sales),raw:cur.sales,passo:cur.checkouts?cur.sales/cur.checkouts*100:null},
   ];
-  const maxV=Math.max(...rows.filter(r=>r.t==='vol'&&r.raw!=null).map(r=>r.raw||0))||1;
-  let fhtml='';
-  rows.forEach(r=>{
-    // Volume rows: bar width proportional to the funnel (Investimento = full width).
-    // Derived cost/rate rows: full-width bar in the distinct 'metric' colour.
-    const isVol=r.t==='vol';
-    const w=isVol?(r.raw==null?100:Math.max(4,(r.raw/maxV)*100)):100;
-    const info=(isVol&&r.passo!=null)?`<div class="passo">passo: <b>${pct(r.passo,1)}</b></div>`:'';
-    fhtml+=`<div class="stage${isVol?'':' metric-row'}">
-      <div class="name">${r.name}<span class="st-delta">${r.delta} vs anterior</span></div>
-      <div class="bar${isVol?'':' metric'}" style="width:${w}%">${r.val}</div>
-      <div class="info">${info}</div>
-    </div>`;
-  });
-  document.getElementById('funnelBox').innerHTML=fhtml;
+  const metRows=[
+    {name:'CPM',val:money(cur.cpm)},
+    {name:'CPC',val:money(cur.cpc)},
+    {name:'CTR',val:pct(cur.ctr)},
+    {name:'Custo/PV',val:money(cur.cpLpv)},
+    {name:'Custo/CHK',val:money(cur.cpChk)},
+    {name:'CAC',val:money(cur.cac)},
+    {name:'ROAS',val:dec(cur.roas)+'×'},
+  ];
+  const maxV=Math.max(...volRows.filter(r=>r.raw!=null).map(r=>r.raw||0))||1;
+  const volHtml=volRows.map(r=>{
+    const w=r.raw==null?100:Math.max(4,(r.raw/maxV)*100);
+    const passo=r.passo!=null?`<span class="st-passo">passo ${pct(r.passo,1)}</span>`:'';
+    return `<div class="stage"><div class="name">${r.name}${passo}</div><div class="bar" style="width:${w}%">${r.val}</div></div>`;
+  }).join('');
+  const metHtml=metRows.map(r=>
+    `<div class="stage metric-row"><div class="name">${r.name}</div><div class="bar metric">${r.val}</div></div>`
+  ).join('');
+  document.getElementById('funnelBox').innerHTML=
+    `<div class="fcol"><div class="fcol-h">Funil · volume</div>${volHtml}</div>`+
+    `<div class="fcol"><div class="fcol-h">Custo / Taxa</div>${metHtml}</div>`;
 
   document.getElementById('taxasBox').innerHTML=
     card('Cliques → Page Views',pct(cur.clkToPv),deltaHTML(cur.clkToPv,prv.clkToPv,'up'),'','Usuários que chegaram à página ÷ cliques')+
