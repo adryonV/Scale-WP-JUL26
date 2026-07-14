@@ -71,21 +71,25 @@ button{font:inherit;cursor:pointer}
 .delta.up{color:var(--good)}.delta.down{color:var(--bad)}.delta.flat{color:var(--muted)}
 .hint{cursor:help;border-bottom:1px dotted #cbd5e1}
 
-/* Funnel visual — two columns: volume (purple) | derived cost/rate (grey) */
-.funnel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
-  padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
-@media(max-width:680px){.funnel{grid-template-columns:1fr;gap:18px}}
-.fcol{display:flex;flex-direction:column;gap:9px}
-.fcol-h{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px}
-.stage{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:12px;margin:0}
-.stage .name{font-weight:600;font-size:13px;display:flex;flex-direction:column;gap:2px}
-.stage .name .st-passo{font-weight:400;font-size:10.5px;color:var(--muted)}
-.stage .bar{height:32px;border-radius:8px;background:linear-gradient(90deg,var(--accent),var(--accent2));
-  display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:700;font-size:13.5px;min-width:44px;
-  transition:width .4s ease}
-/* Derived cost/rate metrics get a distinct bar colour so they read differently from funnel volumes */
-.stage .bar.metric{background:linear-gradient(90deg,#94a3b8,#64748b)}
-.stage.metric-row .name{color:var(--muted)}
+/* Investment total (no goal) shown above the funnel */
+.invest{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:13px 18px;margin-bottom:14px;display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px}
+.invest .invest-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.invest .invest-val{font-size:26px;font-weight:800;color:var(--accent);line-height:1.1}
+
+/* Funnel visual — cocktail style: each stage is a card [volume bar | paired cost metric] */
+.frow{display:grid;grid-template-columns:1.25fr 0.9fr;border-radius:12px;overflow:hidden;
+  box-shadow:var(--shadow);background:var(--card);border:1px solid var(--line)}
+.frow + .frow{margin-top:10px}
+.fmain{color:#fff;padding:13px 16px;display:flex;flex-direction:column;justify-content:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.flabel{font-size:12.5px;opacity:.93;font-weight:600}
+.fval{font-size:26px;font-weight:800;line-height:1.15}
+.fside{padding:10px 16px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.fside .sk{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.fside .sv{font-size:20px;font-weight:800;color:var(--accent)}
+.fextra{font-size:12px;color:var(--muted);margin-top:3px}
+.fextra b{color:var(--ink)}
 
 /* Charts */
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -418,8 +422,13 @@ function renderMetaAds(){
   const prv=metrics(sumAds(pStart,pEnd),sumSales(pStart,pEnd,'facebook'));
 
   let html=`
-  <div class="section-title">Funil do período — vendas Meta Ads · Δ vs período anterior</div>
-  <div class="funnel" id="funnelBox"></div>
+  <div class="invest">
+    <span class="invest-lbl">Investimento com imposto</span>
+    <span class="invest-val" id="investVal"></span>
+  </div>
+
+  <div class="section-title">Funil do período — vendas Meta Ads</div>
+  <div id="funnelBox"></div>
 
   <div class="section-title">Taxas de Passagem</div>
   <div class="grid g3" id="taxasBox"></div>
@@ -446,37 +455,20 @@ function renderMetaAds(){
   destroyAllCharts();
   CONTENT.innerHTML=html;
 
-  // Funnel — two columns: volume stages (purple, left) and their derived
-  // cost/rate metrics (grey, right). Volume bars scale with the funnel.
-  const volRows=[
-    {name:'Investimento',val:money(cur.spendT),raw:null,passo:null},
-    {name:'Impressões',val:int(cur.impressions),raw:cur.impressions,passo:null},
-    {name:'Cliques',val:int(cur.clicks),raw:cur.clicks,passo:cur.impressions?cur.clicks/cur.impressions*100:null},
-    {name:'Page Views',val:int(cur.lpv),raw:cur.lpv,passo:cur.clicks?cur.lpv/cur.clicks*100:null},
-    {name:'Checkouts',val:int(cur.checkouts),raw:cur.checkouts,passo:cur.lpv?cur.checkouts/cur.lpv*100:null},
-    {name:'Vendas Meta',val:int(cur.sales),raw:cur.sales,passo:cur.checkouts?cur.sales/cur.checkouts*100:null},
-    {name:'CAC',val:money(cur.cac),raw:null,passo:null},
-    {name:'ROAS',val:dec(cur.roas)+'×',raw:null,passo:null},
-  ];
-  const metRows=[
-    {name:'CPM',val:money(cur.cpm)},
-    {name:'CPC',val:money(cur.cpc)},
-    {name:'CTR',val:pct(cur.ctr)},
-    {name:'Custo/PV',val:money(cur.cpLpv)},
-    {name:'Custo/CHK',val:money(cur.cpChk)},
-  ];
-  const maxV=Math.max(...volRows.filter(r=>r.raw!=null).map(r=>r.raw||0))||1;
-  const volHtml=volRows.map(r=>{
-    const w=r.raw==null?100:Math.max(4,(r.raw/maxV)*100);
-    const passo=r.passo!=null?`<span class="st-passo">passo ${pct(r.passo,1)}</span>`:'';
-    return `<div class="stage"><div class="name">${r.name}${passo}</div><div class="bar" style="width:${w}%">${r.val}</div></div>`;
-  }).join('');
-  const metHtml=metRows.map(r=>
-    `<div class="stage metric-row"><div class="name">${r.name}</div><div class="bar metric">${r.val}</div></div>`
-  ).join('');
+  // Investment total (no goal) above the funnel.
+  document.getElementById('investVal').textContent=money(cur.spendT);
+
+  // Funnel — cocktail style: each stage is a card [volume | paired cost metric].
+  // frow(label,val,sk,sv,extra): main volume on the left, cost metric on the right.
+  const frow=(label,val,sk,sv,extra)=>
+    `<div class="frow"><div class="fmain"><div class="flabel">${label}</div><div class="fval">${val}</div></div>`+
+    `<div class="fside"><div class="sk">${sk}</div><div class="sv">${sv}</div>${extra?`<div class="fextra">${extra}</div>`:''}</div></div>`;
   document.getElementById('funnelBox').innerHTML=
-    `<div class="fcol"><div class="fcol-h">Funil · volume</div>${volHtml}</div>`+
-    `<div class="fcol"><div class="fcol-h">Custo / Taxa</div>${metHtml}</div>`;
+    frow('Impressões',int(cur.impressions),'CPM',money(cur.cpm),`CTR: <b>${pct(cur.ctr,1)}</b>`)+
+    frow('Cliques',int(cur.clicks),'CPC',money(cur.cpc),'')+
+    frow('Page Views',int(cur.lpv),'Custo/PV',money(cur.cpLpv),'')+
+    frow('Checkouts',int(cur.checkouts),'Custo/CHK',money(cur.cpChk),'')+
+    frow('Vendas Meta',int(cur.sales),'CAC',money(cur.cac),`ROAS: <b>${dec(cur.roas)}×</b>`);
 
   document.getElementById('taxasBox').innerHTML=
     card('Cliques → Page Views',pct(cur.clkToPv),deltaHTML(cur.clkToPv,prv.clkToPv,'up'),'','Usuários que chegaram à página ÷ cliques')+
